@@ -44,10 +44,8 @@ int main() {
 
     // Repartir dos cartas a cada jugador
     jugador1.mano[jugador1.num_cartas++] = robarCarta(mazo, &indice_mazo);
-    jugador1.mano[jugador1.num_cartas++] = robarCarta(mazo, &indice_mazo);
     calcularPuntuacion(&jugador1);
 
-    jugador2.mano[jugador2.num_cartas++] = robarCarta(mazo, &indice_mazo);
     jugador2.mano[jugador2.num_cartas++] = robarCarta(mazo, &indice_mazo);
     calcularPuntuacion(&jugador2);
 
