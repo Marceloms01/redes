@@ -6,6 +6,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <stdbool.h>
 
 #define PORT 2050
 #define MAX_CLIENTS 5
