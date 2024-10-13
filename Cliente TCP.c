@@ -60,8 +60,8 @@ int main(int argc, char const *argv[])
     FD_SET(sd, &readfds); // Para la comunicación con el servidor
 
     printf("Bienvenido al Blackjack online.\n");
-    printf("Inicie sesión para jugar:\n");
-    printf(" - USUARIO suNombre\n");
+    printf("Inicie sesión para jugar o regístrese:\n");
+    printf(" - USUARIO suNombre\n - REGISTRO -u suNombre -p suPassword\n");
 
     // Bucle principal
     do
@@ -89,6 +89,7 @@ int main(int argc, char const *argv[])
                 printf("Introduzca ahora su contraseña así:\n");
                 printf("   PASSWORD suContraseña\n");
             }
+
 
             if (strcmp(buffer, "+Ok. Usuario validado\n") == 0)
             {

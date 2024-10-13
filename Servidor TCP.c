@@ -4,6 +4,7 @@
 #include <netinet/in.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <stdbool.h>
@@ -12,15 +13,64 @@
 #define MAX_CLIENTS 5
 #define MAX_BUFFER 250
 
+bool add_users(char *uname, char *pass){
+    FILE *f;
+    f = fopen("usuarios.txt", "a");
+    if(f != NULL){ 
+        fprintf(f, "%s %s\n", uname, pass);   
+    }
+    fclose(f);
+    return true;
+}
+
+bool check_registered(char *name){
+    FILE *f;
+    char uname[50], pass[50];
+    bool result = false;
+    f = fopen("usuarios.txt", "r");
+    if(f != NULL){
+        while(feof(f) == 0){
+            fscanf(f, "%s %s\n", uname, pass);
+            if(strcmp(name, uname) == 0){
+                result = true;
+                break;
+            }
+        }
+    }
+    fclose(f);
+    return result;
+}
+
+char* find_user(char *name){
+    FILE *f;
+    char uname[50], pass[50];
+    char *result = NULL;
+    f = fopen("usuarios.txt", "r");
+    if(f != NULL){
+        while(feof(f) == 0){
+            fscanf(f, "%s %s\n", uname, pass);
+            if(strcmp(name, uname) == 0){
+                result = pass;
+                break;
+            }
+        }
+    }
+    fclose(f);
+    return result;
+}
+
+
 // Estructura para representar a los jugadores
 typedef struct {
     int socket;
     char username[50];
+    char *password;
     int puntuacion;
     int cartas[10];
     int num_cartas;
     bool en_partida;
     bool mi_turno;
+    bool session;
 } Jugador;
 
 Jugador jugadores[MAX_CLIENTS];
@@ -34,6 +84,8 @@ void inicializar_jugadores() {
         jugadores[i].num_cartas = 0;
         jugadores[i].en_partida = false;
         jugadores[i].mi_turno = false;
+        jugadores[i].session = false;
+
     }
 }
 
@@ -46,16 +98,45 @@ int repartir_carta() {
 void manejar_comando(int i, char* buffer) {
     Jugador* jugador = &jugadores[i];
 
+    // Comando: REGISTRO
+    if(strncmp(buffer, "REGISTRO", 8) == 0){
+        char nickname[50], password[50];
+        sscanf(buffer, "REGISTRO -u %s -p %s", nickname, password);
+        printf("Usuario %s contraseña %s\n", nickname, password);
+        if(!check_registered(nickname)){
+            add_users(nickname, password);
+            send(jugador->socket, "+Ok. Registro correcto\n", strlen("+Ok. Registro correcto\n"), 0);
+        }else{
+            send(jugador->socket, "-Err. Registro incorrecto\n", strlen("-Err. Registro incorrecto\n"), 0);
+        }
+    }
+
     // Comando: USUARIO
     if (strncmp(buffer, "USUARIO", 7) == 0) {
-        sscanf(buffer, "USUARIO %s", jugador->username);
-        printf("Usuario %s conectado\n", jugador->username);
-        send(jugador->socket, "+Ok. Usuario correcto\n", strlen("+Ok. Usuario correcto\n"), 0);
+        char nickname[50], *password;
+        sscanf(buffer, "USUARIO %s", nickname);
+        password = find_user(nickname);
+        if(password != NULL){
+            sscanf(buffer, "USUARIO %s", jugador->username);
+            jugador->password = password; 
+            printf("Usuario %s conectado\n", nickname);
+            send(jugador->socket, "+Ok. Usuario correcto\n", strlen("+Ok. Usuario correcto\n"), 0);
+
+        }else{
+            send(jugador->socket, "-Err. Usuario incorrecto\n", strlen("-Err. Usuario correcto\n"), 0);
+        }
     }
 
     // Comando: PASSWORD (No se valida, es un ejemplo)
     else if (strncmp(buffer, "PASSWORD", 8) == 0) {
-        send(jugador->socket, "+Ok. Usuario validado\n", strlen("+Ok. Usuario validado\n"), 0);
+        char *password;
+        sscanf(buffer, "PASSWORD %s", password);
+        if(strcmp(password, jugador->password) == 0){
+            jugador->session = true;
+            send(jugador->socket, "+Ok. Usuario validado\n", strlen("+Ok. Usuario validado\n"), 0);
+        }else{
+            send(jugador->socket, "-Err. Usuario no validado\n", strlen("-Err. Usuario no validado\n"), 0);
+        }
     }
 
     // Comando: INICIAR-PARTIDA
@@ -189,6 +270,7 @@ int main() {
                     close(jugadores[i].socket);
                     FD_CLR(jugadores[i].socket, &readfds);
                     jugadores[i].socket = -1;
+                    num_jugadores--;
                 }
             }
         }

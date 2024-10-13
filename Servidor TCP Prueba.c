@@ -7,15 +7,41 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <stdbool.h>
+#include <stdlib.h>
 
 #define PORT 2060
 #define MAX_CLIENTS 30
 #define MAX_BUFFER 250
 
 // Estructura para representar a los jugadores
+bool find_user(char *username){
+    FILE *f;
+    char uname[50], pass[50];
+    f = fopen("usuarios.txt", "r");
+    if(f != NULL){
+        while(feof(f) == 0){
+            fscanf(f, "%s %s\n", uname, pass);
+            printf("%s %s\n", uname, pass);
+        }
+    }
+    fclose(f);
+    return false;
+}
+
+bool add_user(char *uname, char *pass){
+    FILE *f;
+    f = fopen("usuarios.txt", "a");
+    if(f != NULL){ 
+        fprintf(f, "%s %s\n", uname, pass);   
+    }
+    fclose(f);
+    return true;
+}
+
 typedef struct {
     int socket;
     char username[50];
+    char password[50];
     int puntuacion;
     int cartas[10];
     int num_cartas;
@@ -25,6 +51,7 @@ typedef struct {
 
 Jugador jugadores[MAX_CLIENTS];
 int num_jugadores = 0;
+FILE *regisro_usuarios;
 
 // Función para inicializar los jugadores
 void inicializar_jugadores() {
@@ -47,8 +74,14 @@ void manejar_comando(int i, char* buffer) {
     Jugador* jugador = &jugadores[i];
 
     // Comando: USUARIO
+
+    if(strstr(buffer, "REGISTRO")!=NULL){
+        send(jugador->socket, "+Ok. Registro correcto\n", strlen("+Ok. Registro correcto\n"), 0);
+    }
+
     if (strncmp(buffer, "USUARIO", 7) == 0) {
-        sscanf(buffer, "USUARIO %s", jugador->username);
+        char uname[50];
+        sscanf(buffer, "USUARIO %s", uname);
         printf("Usuario %s conectado\n", jugador->username);
         send(jugador->socket, "+Ok. Usuario correcto\n", strlen("+Ok. Usuario correcto\n"), 0);
     } else {
@@ -63,6 +96,7 @@ void manejar_comando(int i, char* buffer) {
             send(jugador->socket, "-Err. Usuario no validado\n", strlen("-Err. Usuario no validado\n"), 0);
         }
     }
+
 
     // Comando: INICIAR-PARTIDA
     else if (strcmp(buffer, "INICIAR-PARTIDA\n") == 0) {
@@ -205,6 +239,7 @@ int main() {
                     printf("Jugador desconectado\n");
                     close(jugadores[i].socket);
                     FD_CLR(jugadores[i].socket, &readfds);
+                    num_jugadores--;
                     jugadores[i].socket = -1;
                 }
             }
