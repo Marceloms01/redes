@@ -100,6 +100,7 @@ int main(int argc, char const *argv[])
             if (strncmp(buffer, "+Ok. Empieza la partida.", strlen("+Ok. Empieza la partida.")) == 0)
             {
                 jugando = true;
+                miTurno = true;
                 printf("Opciones durante su turno:\n");
                 printf(" - PEDIR-CARTA\n");
                 printf(" - PLANTARME\n");
@@ -132,38 +133,32 @@ int main(int argc, char const *argv[])
         }
 
         // Entrada del usuario por teclado
-        if (FD_ISSET(0, &auxfds))
-        {
-            bzero(buffer, sizeof(buffer));
-            fgets(buffer, sizeof(buffer), stdin);
+if (FD_ISSET(0, &auxfds)) {
+    bzero(buffer, sizeof(buffer));
+    fgets(buffer, sizeof(buffer), stdin);
 
-            // Validar el estado del juego
-            if (strncmp(buffer, "PASSWORD", strlen("PASSWORD")) == 0 && !jugando)
-            {
-                printf("-Err. Debes iniciar sesión antes de realizar otras acciones\n");
-            }
-            else if (strncmp(buffer, "PEDIR-CARTA", strlen("PEDIR-CARTA")) == 0 && (!jugando || !miTurno))
-            {
-                printf("-Err. Debes estar en una partida y ser tu turno para pedir carta\n");
-            }
-            else if (strncmp(buffer, "PLANTARME", strlen("PLANTARME")) == 0 && (!jugando || !miTurno))
-            {
-                printf("-Err. Debes estar en una partida y ser tu turno para plantarte\n");
-            }
-            else if (strncmp(buffer, "PUNTUACION", strlen("PUNTUACION")) == 0 && !jugando)
-            {
-                printf("-Err. Debes estar en una partida para ver tu puntuación\n");
-            }
-            else if (strncmp(buffer, "SALIR", strlen("SALIR")) == 0 && !jugando)
-            {
-                printf("-Err. No estás en una partida\n");
-            }
-            else
-            {
-                // Enviar comando al servidor
-                send(sd, buffer, sizeof(buffer), 0);
-            }
-        }
+    // Validar el estado del juego
+    if (strncmp(buffer, "PASSWORD", strlen("PASSWORD")) == 0) {
+        // Permitir el envío de la contraseña sin verificar si está en partida
+        send(sd, buffer, strlen(buffer), 0);
+    }
+    else if (strncmp(buffer, "PEDIR-CARTA", strlen("PEDIR-CARTA")) == 0 && (!jugando || !miTurno)) {
+        printf("-Err. Debes estar en una partida y ser tu turno para pedir carta\n");
+    }
+    else if (strncmp(buffer, "PLANTARME", strlen("PLANTARME")) == 0 && (!jugando || !miTurno)) {
+        printf("-Err. Debes estar en una partida y ser tu turno para plantarte\n");
+    }
+    else if (strncmp(buffer, "PUNTUACION", strlen("PUNTUACION")) == 0 && !jugando) {
+        printf("-Err. Debes estar en una partida para ver tu puntuación\n");
+    }
+    else if (strncmp(buffer, "SALIR", strlen("SALIR")) == 0 && !jugando) {
+        printf("-Err. No estás en una partida\n");
+    }
+    else {
+        // Enviar el comando al servidor
+        send(sd, buffer, strlen(buffer), 0);
+    }
+}
     } while (fin == 0);
 
     close(sd); // Cerrar el socket

@@ -4,16 +4,31 @@
 #include <netinet/in.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <stdbool.h>
+#include <stdlib.h>
 
-#define PORT 2050
-#define MAX_CLIENTS 5
+#define PORT 2060
+#define MAX_CLIENTS 30
 #define MAX_BUFFER 250
 
-bool add_users(char *uname, char *pass){
+// Estructura para representar a los jugadores
+bool find_user(char *username){
+    FILE *f;
+    char uname[50], pass[50];
+    f = fopen("usuarios.txt", "r");
+    if(f != NULL){
+        while(feof(f) == 0){
+            fscanf(f, "%s %s\n", uname, pass);
+            printf("%s %s\n", uname, pass);
+        }
+    }
+    fclose(f);
+    return false;
+}
+
+bool add_user(char *uname, char *pass){
     FILE *f;
     f = fopen("usuarios.txt", "a");
     if(f != NULL){ 
@@ -23,60 +38,20 @@ bool add_users(char *uname, char *pass){
     return true;
 }
 
-bool check_registered(char *name){
-    FILE *f;
-    char uname[50], pass[50];
-    bool result = false;
-    f = fopen("usuarios.txt", "r");
-    if(f != NULL){
-        while(feof(f) == 0){
-            fscanf(f, "%s %s\n", uname, pass);
-            if(strcmp(name, uname) == 0){
-                result = true;
-                break;
-            }
-        }
-    }
-    fclose(f);
-    return result;
-}
-
-char* find_user(char *name) {
-    FILE *f;
-    char uname[50], pass[50];
-    char *result = NULL;
-    f = fopen("usuarios.txt", "r");
-    if (f != NULL) {
-        while (!feof(f)) {
-            fscanf(f, "%s %s\n", uname, pass);
-            if (strcmp(name, uname) == 0) {
-                result = strdup(pass);  // Crear una copia de la contraseña
-                break;
-            }
-        }
-        fclose(f);
-    }
-    return result;
-}
-
-
-// Estructura para representar a los jugadores
 typedef struct {
     int socket;
     char username[50];
-    char *password;
+    char password[50];
     int puntuacion;
     int cartas[10];
     int num_cartas;
     bool en_partida;
     bool mi_turno;
-    bool session;
-    bool preparado_para_partida;
-
 } Jugador;
 
 Jugador jugadores[MAX_CLIENTS];
 int num_jugadores = 0;
+FILE *regisro_usuarios;
 
 // Función para inicializar los jugadores
 void inicializar_jugadores() {
@@ -86,9 +61,6 @@ void inicializar_jugadores() {
         jugadores[i].num_cartas = 0;
         jugadores[i].en_partida = false;
         jugadores[i].mi_turno = false;
-        jugadores[i].preparado_para_partida = false; 
-        jugadores[i].session = false;
-
     }
 }
 
@@ -101,65 +73,39 @@ int repartir_carta() {
 void manejar_comando(int i, char* buffer) {
     Jugador* jugador = &jugadores[i];
 
-    // Comando: REGISTRO
-    if(strncmp(buffer, "REGISTRO", 8) == 0){
-        char nickname[50], password[50];
-        sscanf(buffer, "REGISTRO -u %s -p %s", nickname, password);
-        printf("Usuario %s contraseña %s\n", nickname, password);
-        if(!check_registered(nickname)){
-            add_users(nickname, password);
-            send(jugador->socket, "+Ok. Registro correcto\n", strlen("+Ok. Registro correcto\n"), 0);
-        }else{
-            send(jugador->socket, "-Err. Registro incorrecto\n", strlen("-Err. Registro incorrecto\n"), 0);
-        }
-    }
-
     // Comando: USUARIO
-    if (strncmp(buffer, "USUARIO", 7) == 0) {
-        char nickname[50], *password;
-        sscanf(buffer, "USUARIO %s", nickname);
-        password = find_user(nickname);
-        if(password != NULL){
-            sscanf(buffer, "USUARIO %s", jugador->username);
-            jugador->password = password; 
-            printf("Usuario %s conectado\n", nickname);
-            send(jugador->socket, "+Ok. Usuario correcto\n", strlen("+Ok. Usuario correcto\n"), 0);
 
-        }else{
-            send(jugador->socket, "-Err. Usuario incorrecto\n", strlen("-Err. Usuario correcto\n"), 0);
-        }
+     if(strstr(buffer, "REGISTRO") != NULL){
+        send(jugador->socket, "+Ok. Registro correcto\n", strlen("+Ok. Registro correcto\n"), 0);
+    } else if (strncmp(buffer, "USUARIO", 7) == 0) {
+        char uname[50];
+        sscanf(buffer, "USUARIO %s", uname);
+        printf("Usuario %s conectado\n", jugador->username);
+        send(jugador->socket, "+Ok. Usuario correcto\n", strlen("+Ok. Usuario correcto\n"), 0);
+    } else {
+        send(jugador->socket, "-Err. Usuario incorrecto\n", strlen("-Err. Usuario incorrecto\n"), 0);
     }
 
     // Comando: PASSWORD (No se valida, es un ejemplo)
-    else if (strncmp(buffer, "PASSWORD", 8) == 0) {
-    char password[50];
-    sscanf(buffer, "PASSWORD %s", password);
-
-    // Compara la contraseña ingresada con la contraseña almacenada
-    if (jugador->password != NULL && strcmp(password, jugador->password) == 0) {
-        jugador->session = true;
+     if (strncmp(buffer, "PASSWORD", 8) == 0) {
         send(jugador->socket, "+Ok. Usuario validado\n", strlen("+Ok. Usuario validado\n"), 0);
     } else {
-        send(jugador->socket, "-Err. Usuario no validado\n", strlen("-Err. Usuario no validado\n"), 0);
-    }
-}
+            send(jugador->socket, "-Err. Usuario no validado\n", strlen("-Err. Usuario no validado\n"), 0);
+        }
+    
 
 
     // Comando: INICIAR-PARTIDA
-    else if (strcmp(buffer, "INICIAR-PARTIDA\n") == 0) {
-    if (!jugador->session) {
-        send(jugador->socket, "-Err. Debes iniciar sesión antes de comenzar una partida\n", strlen("-Err. Debes iniciar sesión antes de comenzar una partida\n"), 0);
-        return;
+    if (strcmp(buffer, "INICIAR-PARTIDA\n") == 0) {
+        jugador->en_partida = true;
+        jugador->puntuacion = 0;
+        jugador->num_cartas = 0;
+        jugador->mi_turno = true;
+        send(jugador->socket, "+Ok. Empieza la partida. Es tu turno\n", strlen("+Ok. Empieza la partida. Es tu turno\n"), 0);
     }
-    jugador->en_partida = true;
-    jugador->mi_turno = true;
-    jugador->puntuacion = 0;
-    jugador->num_cartas = 0; 
-    send(jugador->socket, "+Ok. Empieza la partida. Es tu turno\n", strlen("+Ok. Empieza la partida. Es tu turno\n"), 0);
-}
 
     // Comando: PEDIR-CARTA
-  else if (strcmp(buffer, "PEDIR-CARTA\n") == 0 && jugador->mi_turno && jugador->en_partida) {
+    else if (strcmp(buffer, "PEDIR-CARTA\n") == 0 && jugador->mi_turno && jugador->en_partida) {
         int carta = repartir_carta();
         jugador->cartas[jugador->num_cartas++] = carta;
         jugador->puntuacion += carta;
@@ -179,8 +125,9 @@ void manejar_comando(int i, char* buffer) {
          } else if (strcmp(buffer, "PEDIR-CARTA\n") == 0) {
         send(jugador->socket, "-Err. No es tu turno o no estás en una partida\n", strlen("-Err. No es tu turno o no estás en una partida\n"), 0);
     }
+
     // Comando: PLANTARME
- else if (strcmp(buffer, "PLANTARME\n") == 0 && jugador->mi_turno && jugador->en_partida) {
+    else if (strcmp(buffer, "PLANTARME\n") == 0 && jugador->mi_turno && jugador->en_partida) {
         jugador->mi_turno = false;
         send(jugador->socket, "+Ok. Te has plantado\n", strlen("+Ok. Te has plantado\n"), 0);
         // Aquí se puede pasar el turno a otro jugador
@@ -198,7 +145,7 @@ void manejar_comando(int i, char* buffer) {
     }
 
     // Comando: SALIR
-   else if (strcmp(buffer, "SALIR\n") == 0) {
+    else if (strcmp(buffer, "SALIR\n") == 0) {
         jugador->en_partida = false;
         jugador->mi_turno = false;
         send(jugador->socket, "+Ok. Has salido de la partida\n", strlen("+Ok. Has salido de la partida\n"), 0);
@@ -209,7 +156,6 @@ void manejar_comando(int i, char* buffer) {
         send(jugador->socket, "-Err. Comando no reconocido\n", strlen("-Err. Comando no reconocido\n"), 0);
     }
 }
-
 
 int main() {
     int sd, new_sd, salida;
@@ -290,8 +236,8 @@ int main() {
                     printf("Jugador desconectado\n");
                     close(jugadores[i].socket);
                     FD_CLR(jugadores[i].socket, &readfds);
-                    jugadores[i].socket = -1;
                     num_jugadores--;
+                    jugadores[i].socket = -1;
                 }
             }
         }
