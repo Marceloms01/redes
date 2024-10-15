@@ -4,9 +4,9 @@
 
 <p>En este apartado se pondrán solo los errores encontrados que hay que solucionar</p>
 
-- Añadir mensajes de error en el servidor. 
-- Arreglar el Cliente para reaccionar ante el inicio de sesión.
-- Añadir juego al servidor.
+- Gestionar turnos.
+- Arreglar boton de salir.
+
 
 ## Lista de fallos y faltas arregladas
 
@@ -14,4 +14,11 @@
 
 - Controlada la desconexión de jugadores.
 - manejado el inicio de sesión.
+- Arreglar el Cliente para reaccionar ante el inicio de sesión.
+- Añadir mensajes de error en el servidor. 
 
+## Opcional 
+
+<p>En caso de venirnos arriba,meter esto</p>
+
+- Mostrar acciones en el servidor (si nos venimos arriba).
