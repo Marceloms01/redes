@@ -10,7 +10,7 @@
 #include <stdbool.h>
 
 #define PORT 2050
-#define MAX_CLIENTS 5
+#define MAX_CLIENTS 20
 #define MAX_BUFFER 250
 
 bool add_users(char *uname, char *pass){
@@ -61,6 +61,7 @@ char* find_user(char *name) {
 
 
 // Estructura para representar a los jugadores
+
 typedef struct {
     int socket;
     char username[50];
@@ -70,13 +71,27 @@ typedef struct {
     int num_cartas;
     bool en_partida;
     bool mi_turno;
+    bool plantado;
     bool session;
     bool preparado_para_partida;
+    int partida_asociada;
 
 } Jugador;
 
+
+typedef struct{
+    Jugador jugador1;
+    Jugador jugador2;
+    int id;
+    bool is_started;
+    
+}Partida;
+
 Jugador jugadores[MAX_CLIENTS];
+Partida partidas[MAX_CLIENTS/2];
+
 int num_jugadores = 0;
+int num_partidas = 0;
 
 // Función para inicializar los jugadores
 void inicializar_jugadores() {
@@ -88,6 +103,53 @@ void inicializar_jugadores() {
         jugadores[i].mi_turno = false;
         jugadores[i].preparado_para_partida = false; 
         jugadores[i].session = false;
+        jugadores[i].partida_asociada = 0;
+        jugadores[i].plantado = false;
+
+    }
+}
+
+Jugador *encontrar_jugador_por_socket(int socket){
+    Jugador *val = NULL;
+    for(int i = 0; i < MAX_CLIENTS;i++){
+        if(jugadores[i].socket == socket){
+            val = &jugadores[i];
+            break;
+        }
+    }
+    return val;
+}
+
+Partida *encontrar_partida_por_id(int id){
+    Partida *val = NULL;
+    for(int i = 0; i < (MAX_CLIENTS/2); i++){
+        if(partidas[i].id == id){
+            val = &partidas[i];
+        }
+    }
+    return val;
+}
+
+void inicializar_partidas() {
+    Jugador jugador;
+    jugador.socket = -1;
+    jugador.puntuacion = 0;
+    jugador.num_cartas = 0;
+    jugador.en_partida = false;
+    jugador.mi_turno = false;
+    jugador.preparado_para_partida = false; 
+    jugador.session = false;
+    for (int i = 0; i < MAX_CLIENTS/2; i++) {
+        partidas[i].jugador1 = jugador;
+        partidas[i].jugador2 = jugador;
+        partidas[i].is_started = false;
+        partidas[i].id = i+1;
+
+    }
+}
+
+void iniciar_partidas(){
+    for(int i = 0; i<MAX_CLIENTS/2;i++){
 
     }
 }
@@ -130,37 +192,58 @@ void manejar_comando(int i, char* buffer) {
         }
     }
 
-    // Comando: PASSWORD (No se valida, es un ejemplo)
+    // Comando: PASSWORD 
     else if (strncmp(buffer, "PASSWORD", 8) == 0) {
-    char password[50];
-    sscanf(buffer, "PASSWORD %s", password);
+        char password[50];
+        sscanf(buffer, "PASSWORD %s", password);
 
-    // Compara la contraseña ingresada con la contraseña almacenada
-    if (jugador->password != NULL && strcmp(password, jugador->password) == 0) {
-        jugador->session = true;
-        send(jugador->socket, "+Ok. Usuario validado\n", strlen("+Ok. Usuario validado\n"), 0);
-    } else {
-        send(jugador->socket, "-Err. Usuario no validado\n", strlen("-Err. Usuario no validado\n"), 0);
+        // Compara la contraseña ingresada con la contraseña almacenada
+        if (jugador->password != NULL && strcmp(password, jugador->password) == 0) {
+            jugador->session = true;
+            send(jugador->socket, "+Ok. Usuario validado\n", strlen("+Ok. Usuario validado\n"), 0);
+        } else {
+            send(jugador->socket, "-Err. Usuario no validado\n", strlen("-Err. Usuario no validado\n"), 0);
+        }
     }
-}
 
 
     // Comando: INICIAR-PARTIDA
-    else if (strcmp(buffer, "INICIAR-PARTIDA\n") == 0) {
-    if (!jugador->session) {
-        send(jugador->socket, "-Err. Debes iniciar sesión antes de comenzar una partida\n", strlen("-Err. Debes iniciar sesión antes de comenzar una partida\n"), 0);
-        return;
+    else if (strcmp(buffer, "INICIAR-PARTIDA\n") == 0 && !jugador->preparado_para_partida && !jugador->en_partida) {
+        if (!jugador->session) {
+            send(jugador->socket, "-Err. Debes iniciar sesión antes de comenzar una partida\n", strlen("-Err. Debes iniciar sesión antes de comenzar una partida\n"), 0);
+            return;
+        }
+        jugador->preparado_para_partida = true;
+        jugador->puntuacion = 0;
+        jugador->num_cartas = 0;
+        for (int i = 0; i<MAX_CLIENTS/2; i++) {
+            if(!partidas[i].is_started){
+                if(partidas[i].jugador1.socket == -1){
+                    partidas[i].jugador1.socket = jugador->socket;
+                    jugador->partida_asociada = partidas[i].id;
+                    send(jugador->socket, "+Ok. Esperando a otro jugador.\n", strlen("+Ok. Esperando a otro jugador.\n"), 0);
+
+                    break;
+                }else{
+                    partidas[i].jugador2.socket = jugador->socket;
+                    jugador->partida_asociada = partidas[i].id;
+                    partidas[i].is_started = true;
+                    jugador->en_partida = true;
+                    Jugador *jug1temp = encontrar_jugador_por_socket(partidas[i].jugador1.socket);
+                    jug1temp->en_partida = true;
+                    jug1temp->mi_turno = true;
+                    send(jugador->socket, "+Ok. Partida encontrada, espera tu turno.\n", strlen("+Ok. Partida encontrada, espera tu turno.\n"), 0);
+                    send(partidas[i].jugador1.socket, "+Ok. Partida encontrada, es tu turno.\n", strlen("+Ok. Partida encontrada, es tu turno.\n"), 0);
+                    break;
+                }
+            }
+        }
     }
-    jugador->en_partida = true;
-    jugador->mi_turno = true;
-    jugador->puntuacion = 0;
-    jugador->num_cartas = 0; 
-    send(jugador->socket, "+Ok. Empieza la partida. Es tu turno\n", strlen("+Ok. Empieza la partida. Es tu turno\n"), 0);
-}
 
     // Comando: PEDIR-CARTA
-  else if (strcmp(buffer, "PEDIR-CARTA\n") == 0 && jugador->mi_turno && jugador->en_partida) {
+    else if (strcmp(buffer, "PEDIR-CARTA\n") == 0 && jugador->mi_turno && jugador->en_partida) {
         int carta = repartir_carta();
+        Partida *partida_actual = encontrar_partida_por_id(jugador->partida_asociada);
         jugador->cartas[jugador->num_cartas++] = carta;
         jugador->puntuacion += carta;
 
@@ -174,19 +257,19 @@ void manejar_comando(int i, char* buffer) {
             jugador->mi_turno = false;
         } else {
             jugador->mi_turno = false;
-            // Aquí se puede pasar el turno a otro jugador
         }
-         } else if (strcmp(buffer, "PEDIR-CARTA\n") == 0) {
+    } else if (strcmp(buffer, "PEDIR-CARTA\n") == 0) {
         send(jugador->socket, "-Err. No es tu turno o no estás en una partida\n", strlen("-Err. No es tu turno o no estás en una partida\n"), 0);
     }
     // Comando: PLANTARME
- else if (strcmp(buffer, "PLANTARME\n") == 0 && jugador->mi_turno && jugador->en_partida) {
-        jugador->mi_turno = false;
-        send(jugador->socket, "+Ok. Te has plantado\n", strlen("+Ok. Te has plantado\n"), 0);
-        // Aquí se puede pasar el turno a otro jugador
-        } else if (strcmp(buffer, "PLANTARME\n") == 0) {
-        send(jugador->socket, "-Err. No es tu turno o no estás en una partida\n", strlen("-Err. No es tu turno o no estás en una partida\n"), 0);
-    }
+    else if (strcmp(buffer, "PLANTARME\n") == 0) {
+        if(jugador->mi_turno && jugador->en_partida){
+            jugador->mi_turno = false;
+            send(jugador->socket, "+Ok. Te has plantado\n", strlen("+Ok. Te has plantado\n"), 0);
+        } else{
+            send(jugador->socket, "-Err. No es tu turno o no estás en una partida\n", strlen("-Err. No es tu turno o no estás en una partida\n"), 0);
+        }
+    } 
 
     // Comando: PUNTUACION
     else if (strcmp(buffer, "PUNTUACION\n") == 0 && jugador->en_partida) {
@@ -198,14 +281,19 @@ void manejar_comando(int i, char* buffer) {
     }
 
     // Comando: SALIR
-   else if (strcmp(buffer, "SALIR\n") == 0) {
-        jugador->en_partida = false;
-        jugador->mi_turno = false;
-        send(jugador->socket, "+Ok. Has salido de la partida\n", strlen("+Ok. Has salido de la partida\n"), 0);
+    else if (strcmp(buffer, "SALIR\n") == 0) {
+        if(jugador->en_partida == true){
+            jugador->en_partida = false;
+            jugador->mi_turno = false;
+            jugador->preparado_para_partida = false;
+            send(jugador->socket, "+Ok. Has salido de la partida\n", strlen("+Ok. Has salido de la partida\n"), 0);
+        } else{
+            send(jugador->socket, "-Err. No estas en una partida\n", strlen("-Err. No estas en una partida\n"), 0);
+        }
     }
     
     // Comando no reconocido
-     else {
+    else {
         send(jugador->socket, "-Err. Comando no reconocido\n", strlen("-Err. Comando no reconocido\n"), 0);
     }
 }
@@ -219,7 +307,8 @@ int main() {
     fd_set readfds, auxfds;
     int max_sd;
 
-    // Inicializar jugadores
+    // Inicializar jugadores y partidas
+    inicializar_partidas();
     inicializar_jugadores();
 
     // Abrir el socket

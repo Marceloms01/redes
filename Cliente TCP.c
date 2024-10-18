@@ -97,10 +97,20 @@ int main(int argc, char const *argv[])
                 printf("   INICIAR-PARTIDA\n");
             }
 
-            if (strncmp(buffer, "+Ok. Empieza la partida.", strlen("+Ok. Empieza la partida.")) == 0)
+            if (strncmp(buffer, "+Ok. Partida encontrada, es tu turno.", strlen("+Ok. Partida encontrada, es tu turno.")) == 0)
             {
                 jugando = true;
                 miTurno = true;
+                printf("Opciones durante su turno:\n");
+                printf(" - PEDIR-CARTA\n");
+                printf(" - PLANTARME\n");
+                printf(" - PUNTUACION\n");
+                printf(" - SALIR\n");
+            }
+            if (strncmp(buffer, "+Ok. Partida encontrada, espera tu turno.", strlen("+Ok. Partida encontrada, espera tu turno.")) == 0)
+            {
+                jugando = true;
+                miTurno = false;
                 printf("Opciones durante su turno:\n");
                 printf(" - PEDIR-CARTA\n");
                 printf(" - PLANTARME\n");
