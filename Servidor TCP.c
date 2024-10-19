@@ -178,11 +178,12 @@ void manejar_comando(int i, char* buffer) {
     if(strncmp(buffer, "REGISTRO", 8) == 0){
         char nickname[50], password[50];
         sscanf(buffer, "REGISTRO -u %s -p %s", nickname, password);
-        printf("Usuario %s contraseña %s\n", nickname, password);
         if(!check_registered(nickname)){
             add_users(nickname, password);
+            printf("Usuario %s contraseña %s: registrado con exito\n", nickname, password);
             send(jugador->socket, "+Ok. Registro correcto\n", strlen("+Ok. Registro correcto\n"), 0);
         }else{
+            printf("Usuario %s contraseña %s: Error, usuario ya registrado\n", nickname, password);
             send(jugador->socket, "-Err. Registro incorrecto\n", strlen("-Err. Registro incorrecto\n"), 0);
         }
     }
@@ -192,6 +193,7 @@ void manejar_comando(int i, char* buffer) {
         char nickname[50], *password;
         sscanf(buffer, "USUARIO %s", nickname);
         if(check_logged(nickname)){
+            printf("Usuario %s ya tiene una sesión abierta\n", nickname);
             send(jugador->socket, "-Err. El usuario tiene una sesión abierta\n", strlen("-Err. El usuario tiene una sesión abierta\n"), 0);
             return;
         }
@@ -216,6 +218,7 @@ void manejar_comando(int i, char* buffer) {
         if (jugador->password != NULL && strcmp(password, jugador->password) == 0) {
             jugador->session = true;
             send(jugador->socket, "+Ok. Usuario validado\n", strlen("+Ok. Usuario validado\n"), 0);
+            printf("Usuario %s inició sesión\n", jugador->username);
         } else {
             send(jugador->socket, "-Err. Usuario no validado\n", strlen("-Err. Usuario no validado\n"), 0);
         }
@@ -237,7 +240,7 @@ void manejar_comando(int i, char* buffer) {
                     partidas[i].jugador1.socket = jugador->socket;
                     jugador->partida_asociada = partidas[i].id;
                     send(jugador->socket, "+Ok. Esperando a otro jugador.\n", strlen("+Ok. Esperando a otro jugador.\n"), 0);
-
+                    printf("Usuario %s se unió a la partida %d como jugador 1\n", jugador->username, partidas[i].id);
                     break;
                 }else{
                     partidas[i].jugador2.socket = jugador->socket;
@@ -247,6 +250,8 @@ void manejar_comando(int i, char* buffer) {
                     Jugador *jug1temp = encontrar_jugador_por_socket(partidas[i].jugador1.socket);
                     jug1temp->en_partida = true;
                     jug1temp->mi_turno = true;
+                    printf("Usuario %s se unió a la partida %d como jugador 2\n", jugador->username, partidas[i].id);
+                    printf("partida %d empezó, jugador 1: %s jugador 2: %s\n",partidas[i].id, jug1temp->username, jugador->username);
                     send(jugador->socket, "+Ok. Partida encontrada, espera tu turno.\n", strlen("+Ok. Partida encontrada, espera tu turno.\n"), 0);
                     send(partidas[i].jugador1.socket, "+Ok. Partida encontrada, es tu turno.\n", strlen("+Ok. Partida encontrada, es tu turno.\n"), 0);
                     break;
@@ -271,6 +276,7 @@ void manejar_comando(int i, char* buffer) {
 
         char mensaje[MAX_BUFFER];
         sprintf(mensaje, "+Ok. Carta recibida: %d. Puntuación: %d\n", carta, jugador->puntuacion);
+        printf("Usuario %s sacó %d puntos en partida %d, total de %d puntos\n", jugador->username, carta, partidas[i].id, jugador->puntuacion);
         send(jugador->socket, mensaje, strlen(mensaje), 0);
         contrincante = encontrar_jugador_por_socket(socket_contrincante);
         contrincante->mi_turno = true;
@@ -284,6 +290,8 @@ void manejar_comando(int i, char* buffer) {
         if(jugador->puntuacion == 21){
             send(jugador->socket, "+Ok. Has sacado 21. Has ganado la partida\n", strlen("+Ok. Has sacado 21. Has ganado la partida\n"), 0);
             send(socket_contrincante, "+Ok. Tu contrincante ha sacado de 21. Has perdido la partida\n", strlen("+Ok. Tu contrincante ha sacado de 21. Has perdido la partida\n"), 0);
+            printf("Usuario %s ganó la partida %d\n", jugador->username, partidas[i].id);
+            printf("La partida %d finalizó\n", partidas[i].id);
             contrincante->en_partida = false;
             contrincante->mi_turno = false;
             jugador->en_partida = false;
@@ -305,6 +313,8 @@ void manejar_comando(int i, char* buffer) {
         if (jugador->puntuacion > 21) {
             send(jugador->socket, "+Ok. Te has pasado de 21. Has perdido la partida\n", strlen("+Ok. Te has pasado de 21. Has perdido la partida\n"), 0);
             send(socket_contrincante, "+Ok. Tu contrincante se ha pasado de 21. Has ganado la partida\n", strlen("+Ok. Tu contrincante se ha pasado de 21. Has ganado la partida\n"), 0);
+            printf("Usuario %s ganó la partida %d\n", contrincante->username, partidas[i].id);
+            printf("La partida %d finalizó\n", partidas[i].id);
             contrincante->en_partida = false;
             contrincante->mi_turno = false;
             jugador->en_partida = false;
@@ -334,6 +344,7 @@ void manejar_comando(int i, char* buffer) {
     // Comando: PLANTARME
     else if (strcmp(buffer, "PLANTARME\n") == 0) {
         if(jugador->mi_turno && jugador->en_partida){
+            printf("Usuario %s se plantó en la partida %d\n", jugador->username, partidas[i].id);
             send(jugador->socket, "+Ok. Te has plantado\n", strlen("+Ok. Te has plantado\n"), 0);
             jugador->mi_turno = false;
             jugador->plantado = true;
@@ -352,12 +363,18 @@ void manejar_comando(int i, char* buffer) {
 
             if(contrincante->plantado && jugador->plantado){
                 if(contrincante->puntuacion > jugador->puntuacion){
+                    printf("Usuario %s ganó la partida %d\n", contrincante->username, partidas[i].id);
+                    printf("La partida %d finalizó\n", partidas[i].id);
                     send(jugador->socket, "+Ok. Has perdido\n", strlen("+Ok. Has perdido\n"), 0);
                     send(contrincante->socket, "+Ok. Has ganado\n", strlen("+Ok. Has ganado\n"), 0);
                 }else if(contrincante->puntuacion < jugador->puntuacion){
+                    printf("Usuario %s ganó la partida %d\n", jugador->username, partidas[i].id);
+                    printf("La partida %d finalizó\n", partidas[i].id);
                     send(jugador->socket, "+Ok. Has ganado\n", strlen("+Ok. Has ganado\n"), 0);
                     send(contrincante->socket, "+Ok. Has perdido\n", strlen("+Ok. Has perdido\n"), 0);
                 }else{
+                    printf("Los jugadores empataron en la partida %d\n", partidas[i].id);
+                    printf("La partida %d finalizó\n", partidas[i].id);
                     send(jugador->socket, "+Ok. Empate\n", strlen("+Ok. Empate\n"), 0);
                     send(contrincante->socket, "+Ok. Empate\n", strlen("+Ok. Empate\n"), 0);
                 }
@@ -378,7 +395,6 @@ void manejar_comando(int i, char* buffer) {
                 partida_actual->jugador2.socket = -1;
                 partida_actual->is_started = false;
             }
-
         } else{
             send(jugador->socket, "-Err. No es tu turno o no estás en una partida\n", strlen("-Err. No es tu turno o no estás en una partida\n"), 0);
         }
@@ -419,6 +435,8 @@ void manejar_comando(int i, char* buffer) {
             partida_actual->jugador1.socket = -1;
             partida_actual->jugador2.socket = -1;
             partida_actual->is_started = false;
+            printf("Usuario %s ha salido de la partida %d\n", jugador->username, partidas[i].id);
+            printf("La partida %d finalizó\n", partidas[i].id);
             send(jugador->socket, "+Ok. Has salido de la partida\n", strlen("+Ok. Has salido de la partida\n"), 0);
             send(contrincante->socket, "+Ok. Tu contrincante ha salido de la partida\n", strlen("+Ok. Tu contrincante ha salido de la partida\n"), 0);
             send(jugador->socket, "+Ok. Partida finalizada\n", strlen("+Ok. Partida finalizada\n"), 0);
@@ -515,7 +533,35 @@ int main() {
                     printf("Jugador desconectado\n");
                     close(jugadores[i].socket);
                     FD_CLR(jugadores[i].socket, &readfds);
+                    if(jugadores[i].partida_asociada > 0){
+                        Partida *partida_actual = encontrar_partida_por_id(jugadores[i].partida_asociada);
+                        Jugador *contrincante = NULL;
+                        int socket_contrincante = -1;
+                        if(jugadores[i].socket == partida_actual->jugador1.socket){
+                            socket_contrincante = partida_actual->jugador2.socket;
+                        }else{
+                            socket_contrincante = partida_actual->jugador1.socket;
+                        }
+                        contrincante = encontrar_jugador_por_socket(socket_contrincante);
+                        send(contrincante->socket, "+Ok. Tu contrincante ha salido de la partida\n", strlen("+Ok. Tu contrincante ha salido de la partida\n"), 0);
+                        contrincante->en_partida = false;
+                        contrincante->mi_turno = false;
+                        jugadores[i].en_partida = false;
+                        jugadores[i].mi_turno = false;
+                        jugadores[i].plantado = false;
+                        jugadores[i].plantado = false;
+                        jugadores[i].preparado_para_partida = false;
+                        contrincante->preparado_para_partida = false;
+                        partida_actual->is_started = false;
+                        jugadores[i].partida_asociada = -1;
+                        contrincante-> partida_asociada = -1;
+                        partida_actual->jugador1.socket = -1;
+                        partida_actual->jugador2.socket = -1;
+                        partida_actual->is_started = false;
+                    }
+                    
                     jugadores[i].socket = -1;
+                    jugadores[i].session = false;
                     num_jugadores--;
                 }
             }
