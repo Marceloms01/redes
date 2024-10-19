@@ -244,19 +244,34 @@ void manejar_comando(int i, char* buffer) {
     else if (strcmp(buffer, "PEDIR-CARTA\n") == 0 && jugador->mi_turno && jugador->en_partida) {
         int carta = repartir_carta();
         Partida *partida_actual = encontrar_partida_por_id(jugador->partida_asociada);
+        int socket_contrincante = -1;
+        Jugador *contrincante = NULL;
+        if(jugador->socket == partida_actual->jugador1.socket){
+            socket_contrincante = partida_actual->jugador2.socket;
+        }else{
+            socket_contrincante = partida_actual->jugador1.socket;
+        }
         jugador->cartas[jugador->num_cartas++] = carta;
         jugador->puntuacion += carta;
 
         char mensaje[MAX_BUFFER];
         sprintf(mensaje, "+Ok. Carta recibida: %d. Puntuación: %d\n", carta, jugador->puntuacion);
         send(jugador->socket, mensaje, strlen(mensaje), 0);
+        contrincante = encontrar_jugador_por_socket(socket_contrincante);
+        contrincante->mi_turno = true;
+        send(jugador->socket, "+Ok. Turno del otro jugador\n", strlen("+Ok. Turno del otro jugador\n"), 0);
+        send(socket_contrincante, "+Ok. Turno de partida\n", strlen("+Ok. Turno de partida\n"), 0);
+
 
         if (jugador->puntuacion > 21) {
             send(jugador->socket, "+Ok. Te has pasado de 21. Has perdido la partida\n", strlen("+Ok. Te has pasado de 21. Has perdido la partida\n"), 0);
+            contrincante->en_partida = false;
+            contrincante->mi_turno = false;
             jugador->en_partida = false;
             jugador->mi_turno = false;
         } else {
             jugador->mi_turno = false;
+            contrincante->mi_turno = true;
         }
     } else if (strcmp(buffer, "PEDIR-CARTA\n") == 0) {
         send(jugador->socket, "-Err. No es tu turno o no estás en una partida\n", strlen("-Err. No es tu turno o no estás en una partida\n"), 0);
