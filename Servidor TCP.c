@@ -94,7 +94,7 @@ Partida partidas[MAX_CLIENTS/2];
 bool check_logged(char *name){
     bool val = false;
     for(int i = 0; i < MAX_CLIENTS; i++){
-        if(strcmp(name, jugadores[i].username) == 0){
+        if(strcmp(name, jugadores[i].username) == 0 && jugadores[i].session){
             val = true;
         }
     }
@@ -252,7 +252,7 @@ void manejar_comando(int i, char* buffer) {
     }
 
     // Comando: PEDIR-CARTA
-    else if (strcmp(buffer, "PEDIR-CARTA\n") == 0 && jugador->mi_turno && jugador->en_partida) {
+    else if (strcmp(buffer, "PEDIR-CARTA\n") == 0 && jugador->mi_turno && jugador->en_partida && !jugador->plantado) {
         int carta = repartir_carta();
         Partida *partida_actual = encontrar_partida_por_id(jugador->partida_asociada);
         int socket_contrincante = -1;
@@ -270,9 +270,33 @@ void manejar_comando(int i, char* buffer) {
         send(jugador->socket, mensaje, strlen(mensaje), 0);
         contrincante = encontrar_jugador_por_socket(socket_contrincante);
         contrincante->mi_turno = true;
-        send(jugador->socket, "+Ok. Turno del otro jugador\n", strlen("+Ok. Turno del otro jugador\n"), 0);
-        send(socket_contrincante, "+Ok. Turno de partida\n", strlen("+Ok. Turno de partida\n"), 0);
+        if(!contrincante->plantado){
+            send(jugador->socket, "+Ok. Turno del otro jugador\n", strlen("+Ok. Turno del otro jugador\n"), 0);
+            send(socket_contrincante, "+Ok. Turno de partida\n", strlen("+Ok. Turno de partida\n"), 0);
+        }else{
+            send(jugador->socket, "+Ok. Turno de partida\n", strlen("+Ok. Turno de partida\n"), 0);
+        }
 
+        if(jugador->puntuacion == 21){
+            send(jugador->socket, "+Ok. Has sacado 21. Has ganado la partida\n", strlen("+Ok. Has sacado 21. Has ganado la partida\n"), 0);
+            send(socket_contrincante, "+Ok. Tu contrincante ha sacado de 21. Has perdido la partida\n", strlen("+Ok. Tu contrincante ha sacado de 21. Has perdido la partida\n"), 0);
+            contrincante->en_partida = false;
+            contrincante->mi_turno = false;
+            jugador->en_partida = false;
+            jugador->mi_turno = false;
+            jugador->plantado = false;
+            contrincante->plantado = false;
+            jugador->preparado_para_partida = false;
+            contrincante->preparado_para_partida = false;
+            partida_actual->is_started = false;
+            jugador->partida_asociada = -1;
+            contrincante-> partida_asociada = -1;
+            send(jugador->socket, "+Ok. Partida finalizada\n", strlen("+Ok. Partida finalizada\n"), 0);
+            send(contrincante->socket, "+Ok. Partida finalizada\n", strlen("+Ok. Partida finalizada\n"), 0);
+            partida_actual->jugador1.socket = -1;
+            partida_actual->jugador2.socket = -1;
+            partida_actual->is_started = false;
+        }
 
         if (jugador->puntuacion > 21) {
             send(jugador->socket, "+Ok. Te has pasado de 21. Has perdido la partida\n", strlen("+Ok. Te has pasado de 21. Has perdido la partida\n"), 0);
@@ -294,19 +318,63 @@ void manejar_comando(int i, char* buffer) {
             partida_actual->jugador2.socket = -1;
             partida_actual->is_started = false;
 
-        } else {
+        }
+        if(!contrincante->plantado){
             jugador->mi_turno = false;
             contrincante->mi_turno = true;
-        }
+            }
+        
     } else if (strcmp(buffer, "PEDIR-CARTA\n") == 0) {
         send(jugador->socket, "-Err. No es tu turno o no estás en una partida\n", strlen("-Err. No es tu turno o no estás en una partida\n"), 0);
     }
     // Comando: PLANTARME
     else if (strcmp(buffer, "PLANTARME\n") == 0) {
         if(jugador->mi_turno && jugador->en_partida){
+            send(jugador->socket, "+Ok. Te has plantado\n", strlen("+Ok. Te has plantado\n"), 0);
             jugador->mi_turno = false;
             jugador->plantado = true;
-            send(jugador->socket, "+Ok. Te has plantado\n", strlen("+Ok. Te has plantado\n"), 0);
+            Partida *partida_actual = encontrar_partida_por_id(jugador->partida_asociada);
+            int socket_contrincante = -1;
+            if(jugador->socket == partida_actual->jugador1.socket){
+                socket_contrincante = partida_actual->jugador2.socket;
+            }else{
+                socket_contrincante = partida_actual->jugador1.socket;
+            }
+            Jugador *contrincante = encontrar_jugador_por_socket(socket_contrincante);
+            if(!contrincante->plantado){
+                contrincante->mi_turno = true;
+                send(socket_contrincante, "+Ok. Turno de partida\n", strlen("+Ok. Turno de partida\n"), 0);
+            }
+
+            if(contrincante->plantado && jugador->plantado){
+                if(contrincante->puntuacion > jugador->puntuacion){
+                    send(jugador->socket, "+Ok. Has perdido\n", strlen("+Ok. Has perdido\n"), 0);
+                    send(contrincante->socket, "+Ok. Has ganado\n", strlen("+Ok. Has ganado\n"), 0);
+                }else if(contrincante->puntuacion < jugador->puntuacion){
+                    send(jugador->socket, "+Ok. Has ganado\n", strlen("+Ok. Has ganado\n"), 0);
+                    send(contrincante->socket, "+Ok. Has perdido\n", strlen("+Ok. Has perdido\n"), 0);
+                }else{
+                    send(jugador->socket, "+Ok. Empate\n", strlen("+Ok. Empate\n"), 0);
+                    send(contrincante->socket, "+Ok. Empate\n", strlen("+Ok. Empate\n"), 0);
+                }
+                contrincante->en_partida = false;
+                contrincante->mi_turno = false;
+                jugador->en_partida = false;
+                jugador->mi_turno = false;
+                jugador->plantado = false;
+                contrincante->plantado = false;
+                jugador->preparado_para_partida = false;
+                contrincante->preparado_para_partida = false;
+                partida_actual->is_started = false;
+                jugador->partida_asociada = -1;
+                contrincante-> partida_asociada = -1;
+                send(jugador->socket, "+Ok. Partida finalizada\n", strlen("+Ok. Partida finalizada\n"), 0);
+                send(contrincante->socket, "+Ok. Partida finalizada\n", strlen("+Ok. Partida finalizada\n"), 0);
+                partida_actual->jugador1.socket = -1;
+                partida_actual->jugador2.socket = -1;
+                partida_actual->is_started = false;
+            }
+
         } else{
             send(jugador->socket, "-Err. No es tu turno o no estás en una partida\n", strlen("-Err. No es tu turno o no estás en una partida\n"), 0);
         }
