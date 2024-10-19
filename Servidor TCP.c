@@ -41,6 +41,7 @@ bool check_registered(char *name){
     return result;
 }
 
+
 char* find_user(char *name) {
     FILE *f;
     char uname[50], pass[50];
@@ -89,6 +90,16 @@ typedef struct{
 
 Jugador jugadores[MAX_CLIENTS];
 Partida partidas[MAX_CLIENTS/2];
+
+bool check_logged(char *name){
+    bool val = false;
+    for(int i = 0; i < MAX_CLIENTS; i++){
+        if(strcmp(name, jugadores[i].username) == 0){
+            val = true;
+        }
+    }
+    return val;
+}
 
 int num_jugadores = 0;
 int num_partidas = 0;
@@ -265,10 +276,24 @@ void manejar_comando(int i, char* buffer) {
 
         if (jugador->puntuacion > 21) {
             send(jugador->socket, "+Ok. Te has pasado de 21. Has perdido la partida\n", strlen("+Ok. Te has pasado de 21. Has perdido la partida\n"), 0);
+            send(socket_contrincante, "+Ok. Tu contrincante se ha pasado de 21. Has ganado la partida\n", strlen("+Ok. Tu contrincante se ha pasado de 21. Has ganado la partida\n"), 0);
             contrincante->en_partida = false;
             contrincante->mi_turno = false;
             jugador->en_partida = false;
             jugador->mi_turno = false;
+            jugador->plantado = false;
+            contrincante->plantado = false;
+            jugador->preparado_para_partida = false;
+            contrincante->preparado_para_partida = false;
+            partida_actual->is_started = false;
+            jugador->partida_asociada = -1;
+            contrincante-> partida_asociada = -1;
+            send(jugador->socket, "+Ok. Partida finalizada\n", strlen("+Ok. Partida finalizada\n"), 0);
+            send(contrincante->socket, "+Ok. Partida finalizada\n", strlen("+Ok. Partida finalizada\n"), 0);
+            partida_actual->jugador1.socket = -1;
+            partida_actual->jugador2.socket = -1;
+            partida_actual->is_started = false;
+
         } else {
             jugador->mi_turno = false;
             contrincante->mi_turno = true;
@@ -280,6 +305,7 @@ void manejar_comando(int i, char* buffer) {
     else if (strcmp(buffer, "PLANTARME\n") == 0) {
         if(jugador->mi_turno && jugador->en_partida){
             jugador->mi_turno = false;
+            jugador->plantado = true;
             send(jugador->socket, "+Ok. Te has plantado\n", strlen("+Ok. Te has plantado\n"), 0);
         } else{
             send(jugador->socket, "-Err. No es tu turno o no estás en una partida\n", strlen("-Err. No es tu turno o no estás en una partida\n"), 0);
@@ -298,10 +324,33 @@ void manejar_comando(int i, char* buffer) {
     // Comando: SALIR
     else if (strcmp(buffer, "SALIR\n") == 0) {
         if(jugador->en_partida == true){
+            Partida *partida_actual = encontrar_partida_por_id(jugador->partida_asociada);
+            Jugador *contrincante = NULL;
+            int socket_contrincante = -1;
+            if(jugador->socket == partida_actual->jugador1.socket){
+                socket_contrincante = partida_actual->jugador2.socket;
+            }else{
+                socket_contrincante = partida_actual->jugador1.socket;
+            }
+            contrincante = encontrar_jugador_por_socket(socket_contrincante);
+            contrincante->en_partida = false;
+            contrincante->mi_turno = false;
             jugador->en_partida = false;
             jugador->mi_turno = false;
+            jugador->plantado = false;
+            contrincante->plantado = false;
             jugador->preparado_para_partida = false;
+            contrincante->preparado_para_partida = false;
+            partida_actual->is_started = false;
+            jugador->partida_asociada = -1;
+            contrincante-> partida_asociada = -1;
+            partida_actual->jugador1.socket = -1;
+            partida_actual->jugador2.socket = -1;
+            partida_actual->is_started = false;
             send(jugador->socket, "+Ok. Has salido de la partida\n", strlen("+Ok. Has salido de la partida\n"), 0);
+            send(contrincante->socket, "+Ok. Tu contrincante ha salido de la partida\n", strlen("+Ok. Tu contrincante ha salido de la partida\n"), 0);
+            send(jugador->socket, "+Ok. Partida finalizada\n", strlen("+Ok. Partida finalizada\n"), 0);
+            send(contrincante->socket, "+Ok. Partida finalizada\n", strlen("+Ok. Partida finalizada\n"), 0);
         } else{
             send(jugador->socket, "-Err. No estas en una partida\n", strlen("-Err. No estas en una partida\n"), 0);
         }
