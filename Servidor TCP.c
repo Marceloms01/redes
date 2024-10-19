@@ -191,6 +191,10 @@ void manejar_comando(int i, char* buffer) {
     if (strncmp(buffer, "USUARIO", 7) == 0) {
         char nickname[50], *password;
         sscanf(buffer, "USUARIO %s", nickname);
+        if(check_logged(nickname)){
+            send(jugador->socket, "-Err. El usuario tiene una sesión abierta\n", strlen("-Err. El usuario tiene una sesión abierta\n"), 0);
+            return;
+        }
         password = find_user(nickname);
         if(password != NULL){
             sscanf(buffer, "USUARIO %s", jugador->username);
