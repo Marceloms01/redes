@@ -7,14 +7,16 @@
 
 typedef struct {
     int valor;
+    char nombre;
     char palo[10];  // Tamaño suficiente para "Corazones", "Diamantes", etc.
 } Carta;
+
 typedef struct {
     int socket;
     char username[50];
     char *password;
     int puntuacion;
-      int cartas[10];
+    int cartas[10];
     Carta mano[11];
     int num_cartas;
     bool en_partida;
