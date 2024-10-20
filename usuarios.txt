@@ -1,10 +1,7 @@
 jose 1234
 usuario contraseña
 usser pass
-usser pass
 nombre pass
-pepe pass
-pepe pass
 pepo pass
 joseantonio rodro
 marcelo 1111
