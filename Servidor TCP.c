@@ -1,3 +1,4 @@
+#include <time.h>
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -8,6 +9,7 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <stdbool.h>
+#include "protogame.h"
 
 #define PORT 2050
 #define MAX_CLIENTS 20
@@ -63,7 +65,7 @@ char* find_user(char *name) {
 
 // Estructura para representar a los jugadores
 
-typedef struct {
+/*typedef struct {
     int socket;
     char username[50];
     char *password;
@@ -78,14 +80,15 @@ typedef struct {
     int partida_asociada;
 
 } Jugador;
-
+*/
 
 typedef struct{
     Jugador jugador1;
     Jugador jugador2;
     int id;
     bool is_started;
-    
+    Carta mazo[52];
+    int sig_carta;
 }Partida;
 
 Jugador jugadores[MAX_CLIENTS];
@@ -155,12 +158,9 @@ void inicializar_partidas() {
         partidas[i].jugador2 = jugador;
         partidas[i].is_started = false;
         partidas[i].id = i+1;
-
-    }
-}
-
-void iniciar_partidas(){
-    for(int i = 0; i<MAX_CLIENTS/2;i++){
+        inicializarMazo(partidas[i].mazo);
+        barajar(partidas[i].mazo);
+        partidas[i].sig_carta = 0;
 
     }
 }
@@ -262,7 +262,7 @@ void manejar_comando(int i, char* buffer) {
 
     // Comando: PEDIR-CARTA
     else if (strcmp(buffer, "PEDIR-CARTA\n") == 0 && jugador->mi_turno && jugador->en_partida && !jugador->plantado) {
-        int carta = repartir_carta();
+        Carta carta;
         Partida *partida_actual = encontrar_partida_por_id(jugador->partida_asociada);
         int socket_contrincante = -1;
         Jugador *contrincante = NULL;
@@ -271,12 +271,14 @@ void manejar_comando(int i, char* buffer) {
         }else{
             socket_contrincante = partida_actual->jugador1.socket;
         }
-        jugador->cartas[jugador->num_cartas++] = carta;
-        jugador->puntuacion += carta;
+        
+        carta = robarCarta(partida_actual->mazo, &partida_actual->sig_carta);
+        jugador->mano[jugador->num_cartas++] = carta;
+        jugador->puntuacion += carta.valor;
 
         char mensaje[MAX_BUFFER];
-        sprintf(mensaje, "+Ok. Carta recibida: %d. Puntuación: %d\n", carta, jugador->puntuacion);
-        printf("Usuario %s sacó %d puntos en partida %d, total de %d puntos\n", jugador->username, carta, partidas[i].id, jugador->puntuacion);
+        sprintf(mensaje, "+Ok. Carta recibida: %c de %s. Puntuación: %d\n", carta.nombre, carta.palo, jugador->puntuacion);
+        printf("Usuario %s sacó %d puntos en partida %d, total de %d puntos\n", jugador->username, carta.valor, partidas[i].id, jugador->puntuacion);
         send(jugador->socket, mensaje, strlen(mensaje), 0);
         contrincante = encontrar_jugador_por_socket(socket_contrincante);
         contrincante->mi_turno = true;
@@ -290,8 +292,11 @@ void manejar_comando(int i, char* buffer) {
         if(jugador->puntuacion == 21){
             send(jugador->socket, "+Ok. Has sacado 21. Has ganado la partida\n", strlen("+Ok. Has sacado 21. Has ganado la partida\n"), 0);
             send(socket_contrincante, "+Ok. Tu contrincante ha sacado de 21. Has perdido la partida\n", strlen("+Ok. Tu contrincante ha sacado de 21. Has perdido la partida\n"), 0);
-            printf("Usuario %s ganó la partida %d\n", jugador->username, partidas[i].id);
-            printf("La partida %d finalizó\n", partidas[i].id);
+            printf("Usuario %s ganó la partida %d\n", jugador->username, partida_actual->id);
+            printf("La partida %d finalizó\n", partida_actual->id);
+            inicializarMazo(partida_actual->mazo);
+            barajar(partida_actual->mazo);
+            partida_actual->sig_carta = 0;
             contrincante->en_partida = false;
             contrincante->mi_turno = false;
             jugador->en_partida = false;
@@ -313,8 +318,11 @@ void manejar_comando(int i, char* buffer) {
         if (jugador->puntuacion > 21) {
             send(jugador->socket, "+Ok. Te has pasado de 21. Has perdido la partida\n", strlen("+Ok. Te has pasado de 21. Has perdido la partida\n"), 0);
             send(socket_contrincante, "+Ok. Tu contrincante se ha pasado de 21. Has ganado la partida\n", strlen("+Ok. Tu contrincante se ha pasado de 21. Has ganado la partida\n"), 0);
-            printf("Usuario %s ganó la partida %d\n", contrincante->username, partidas[i].id);
-            printf("La partida %d finalizó\n", partidas[i].id);
+            printf("Usuario %s ganó la partida %d\n", contrincante->username, partida_actual->id);
+            printf("La partida %d finalizó\n", partida_actual->id);
+            inicializarMazo(partida_actual->mazo);
+            barajar(partida_actual->mazo);
+            partida_actual->sig_carta = 0;
             contrincante->en_partida = false;
             contrincante->mi_turno = false;
             jugador->en_partida = false;
@@ -344,11 +352,11 @@ void manejar_comando(int i, char* buffer) {
     // Comando: PLANTARME
     else if (strcmp(buffer, "PLANTARME\n") == 0) {
         if(jugador->mi_turno && jugador->en_partida){
-            printf("Usuario %s se plantó en la partida %d\n", jugador->username, partidas[i].id);
             send(jugador->socket, "+Ok. Te has plantado\n", strlen("+Ok. Te has plantado\n"), 0);
             jugador->mi_turno = false;
             jugador->plantado = true;
             Partida *partida_actual = encontrar_partida_por_id(jugador->partida_asociada);
+            printf("Usuario %s se plantó en la partida %d\n", jugador->username, partida_actual->id);
             int socket_contrincante = -1;
             if(jugador->socket == partida_actual->jugador1.socket){
                 socket_contrincante = partida_actual->jugador2.socket;
@@ -363,21 +371,24 @@ void manejar_comando(int i, char* buffer) {
 
             if(contrincante->plantado && jugador->plantado){
                 if(contrincante->puntuacion > jugador->puntuacion){
-                    printf("Usuario %s ganó la partida %d\n", contrincante->username, partidas[i].id);
-                    printf("La partida %d finalizó\n", partidas[i].id);
+                    printf("Usuario %s ganó la partida %d\n", contrincante->username, partida_actual->id);
+                    printf("La partida %d finalizó\n", partida_actual->id);
                     send(jugador->socket, "+Ok. Has perdido\n", strlen("+Ok. Has perdido\n"), 0);
                     send(contrincante->socket, "+Ok. Has ganado\n", strlen("+Ok. Has ganado\n"), 0);
                 }else if(contrincante->puntuacion < jugador->puntuacion){
-                    printf("Usuario %s ganó la partida %d\n", jugador->username, partidas[i].id);
-                    printf("La partida %d finalizó\n", partidas[i].id);
+                    printf("Usuario %s ganó la partida %d\n", jugador->username, partida_actual->id);
+                    printf("La partida %d finalizó\n", partida_actual->id);
                     send(jugador->socket, "+Ok. Has ganado\n", strlen("+Ok. Has ganado\n"), 0);
                     send(contrincante->socket, "+Ok. Has perdido\n", strlen("+Ok. Has perdido\n"), 0);
                 }else{
-                    printf("Los jugadores empataron en la partida %d\n", partidas[i].id);
-                    printf("La partida %d finalizó\n", partidas[i].id);
+                    printf("Los jugadores empataron en la partida %d\n", partida_actual->id);
+                    printf("La partida %d finalizó\n", partida_actual->id);
                     send(jugador->socket, "+Ok. Empate\n", strlen("+Ok. Empate\n"), 0);
                     send(contrincante->socket, "+Ok. Empate\n", strlen("+Ok. Empate\n"), 0);
                 }
+                inicializarMazo(partida_actual->mazo);
+                barajar(partida_actual->mazo);
+                partida_actual->sig_carta = 0;
                 contrincante->en_partida = false;
                 contrincante->mi_turno = false;
                 jugador->en_partida = false;
@@ -420,6 +431,9 @@ void manejar_comando(int i, char* buffer) {
             }else{
                 socket_contrincante = partida_actual->jugador1.socket;
             }
+            inicializarMazo(partida_actual->mazo);
+            barajar(partida_actual->mazo);
+            partida_actual->sig_carta = 0;
             contrincante = encontrar_jugador_por_socket(socket_contrincante);
             contrincante->en_partida = false;
             contrincante->mi_turno = false;
@@ -435,8 +449,8 @@ void manejar_comando(int i, char* buffer) {
             partida_actual->jugador1.socket = -1;
             partida_actual->jugador2.socket = -1;
             partida_actual->is_started = false;
-            printf("Usuario %s ha salido de la partida %d\n", jugador->username, partidas[i].id);
-            printf("La partida %d finalizó\n", partidas[i].id);
+            printf("Usuario %s ha salido de la partida %d\n", jugador->username, partida_actual->id);
+            printf("La partida %d finalizó\n", partida_actual->id);
             send(jugador->socket, "+Ok. Has salido de la partida\n", strlen("+Ok. Has salido de la partida\n"), 0);
             send(contrincante->socket, "+Ok. Tu contrincante ha salido de la partida\n", strlen("+Ok. Tu contrincante ha salido de la partida\n"), 0);
             send(jugador->socket, "+Ok. Partida finalizada\n", strlen("+Ok. Partida finalizada\n"), 0);
@@ -445,7 +459,6 @@ void manejar_comando(int i, char* buffer) {
             send(jugador->socket, "-Err. No estas en una partida\n", strlen("-Err. No estas en una partida\n"), 0);
         }
     }
-    
     // Comando no reconocido
     else {
         send(jugador->socket, "-Err. Comando no reconocido\n", strlen("-Err. Comando no reconocido\n"), 0);
@@ -461,6 +474,7 @@ int main() {
     fd_set readfds, auxfds;
     int max_sd;
 
+    srand(time(NULL));
     // Inicializar jugadores y partidas
     inicializar_partidas();
     inicializar_jugadores();
