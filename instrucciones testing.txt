@@ -1,1 +1,2 @@
-mete aqui toda la mierda que pueda romper lo que tengamos hecho
+gcc -o Client Cliente\ TCP.c
+gcc -o Server Servidor\ TCP.c protogame.c
