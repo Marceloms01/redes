@@ -63,25 +63,6 @@ char* find_user(char *name) {
 }
 
 
-// Estructura para representar a los jugadores
-
-/*typedef struct {
-    int socket;
-    char username[50];
-    char *password;
-    int puntuacion;
-    int cartas[10];
-    int num_cartas;
-    bool en_partida;
-    bool mi_turno;
-    bool plantado;
-    bool session;
-    bool preparado_para_partida;
-    int partida_asociada;
-
-} Jugador;
-*/
-
 typedef struct{
     Jugador jugador1;
     Jugador jugador2;
